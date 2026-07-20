@@ -1,0 +1,33 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: LLMInferenceService
+metadata:
+  name: qwen2-0b5-instruct-local
+  namespace: llm-demo
+spec:
+  model:
+    name: Qwen/Qwen2.5-0.5B-Instruct
+    uri: pvc://qwen-local-pv-claim/
+  replicas: 1
+  router:
+    scheduler: {}
+    route: {}
+    gateway:
+      refs:
+        - name: kserve-ingress-gateway
+          namespace: kserve
+  template:
+    containers:
+      - name: main
+        image: 127.0.0.1:5000/kserve/huggingfaceserver:v0.17.0-gpu
+        resources:
+          limits:
+            cpu: '2'
+            memory: 6Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: '100m'
+            memory: 2Gi
+            nvidia.com/gpu: "1"
+        env:
+          - name: HF_HOME
+            value: "/mnt/models"

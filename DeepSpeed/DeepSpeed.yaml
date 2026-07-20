@@ -1,0 +1,48 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: LLMInferenceService
+metadata:
+  name: qwen2-0b5-instruct-local
+  namespace: llm-demo
+spec:
+  model:
+    name: Qwen/Qwen2.5-0.5B-Instruct
+    uri: pvc://qwen-local-pv-claim/
+  replicas: 1
+  router:
+    scheduler: {}
+    route: {}
+    gateway:
+      refs:
+        - name: kserve-ingress-gateway
+          namespace: kserve
+  template:
+    containers:
+      - name: main
+        image: 127.0.0.1:5000/kserve/huggingfaceserver:v0.17.0-gpu
+        resources:
+          limits:
+            cpu: '2'
+            memory: 12Gi
+            nvidia.com/gpu: "2"
+          requests:
+            cpu: '100m'
+            memory: 4Gi
+            nvidia.com/gpu: "2"
+        env:
+          - name: HF_HOME
+            value: "/mnt/models"
+          # 1. Turn off vLLM explicitly so it uses the HuggingFace fallback back                                                                           end
+          - name: BACKEND
+            value: "huggingface"
+          # 2. Tell Hugging Face Accelerate to use DeepSpeed
+          - name: ACCELERATE_USE_DEEPSPEED
+            value: "true"
+          # 3. Pass ZeRO-3 parameters directly to the engine via env vars
+          - name: DEEPSPEED_STAGE
+            value: "3"
+          - name: DEEPSPEED_CONFIG_FILE
+            value: "/etc/deepspeed/zero3_config.json"
+        # 4. Remove vLLM flags from the arguments since we aren't using the vLLM                                                                            engine
+        args:
+          - --model_id=/mnt/models
+          - --port=8000
