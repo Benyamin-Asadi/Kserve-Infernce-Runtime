@@ -1,0 +1,57 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: qwen-multitier-offload
+  namespace: llm-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    containers:
+      - name: kserve-container
+        image: ghcr.io/ggml-org/llama.cpp:server-cuda
+        args:
+          - "--model"
+          - "/mnt/models/qwen2.5-0.5b-instruct-q8_0.gguf"
+          # VRAM boundary: only these layers go to the GPU. Qwen2.5-0.5B has
+          # 24 layers, so 10 here leaves 14 on the CPU side.
+          - "--n-gpu-layers"
+          - "10"
+          # RAM/disk boundary: mmap is the DEFAULT. No flag belongs here.
+          - "--ctx-size"
+          - "2048"
+          - "--host"
+          - "0.0.0.0"
+          - "--port"
+          - "8080"
+          - "-v"
+        ports:
+          - containerPort: 8080
+            protocol: TCP
+        resources:
+          limits:
+            cpu: '2'
+            memory: "2Gi"
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: '500m'
+            memory: "1Gi"
+            nvidia.com/gpu: "1"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 10
+        volumeMounts:
+          - name: model-storage
+            mountPath: /mnt/models
+    volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: qwen-gguf-pvc
