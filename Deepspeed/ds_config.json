@@ -1,0 +1,34 @@
+{
+  "fp16": {
+    "enabled": true
+  },
+  "zero_optimization": {
+    "stage": 3,
+    "offload_param": {
+      "device": "nvme",
+      "nvme_path": "/local-offload",
+      "pin_memory": true,
+      "buffer_count": 4,
+      "buffer_size": 1e8,
+      "max_in_cpu": 5e8
+    },
+    "offload_optimizer": {
+      "device": "none"
+    },
+    "overlap_comm": true,
+    "contiguous_gradients": true,
+    "stage3_max_live_parameters": 1e8,
+    "stage3_max_reuse_distance": 1e8,
+    "stage3_prefetch_bucket_size": 5e7,
+    "stage3_param_persistence_threshold": 1e5
+  },
+  "aio": {
+    "block_size": 1048576,
+    "queue_depth": 8,
+    "thread_count": 1,
+    "single_submit": false,
+    "overlap_events": true
+  },
+  "train_batch_size": 1,
+  "train_micro_batch_size_per_gpu": 1
+}

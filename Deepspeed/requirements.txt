@@ -1,0 +1,24 @@
+transformers==4.44.2
+accelerate==0.33.0
+kserve==0.18.0
+sentencepiece
+
+# fastapi and uvicorn are deliberately NOT pinned here — kserve==0.18.0
+# requires fastapi>=0.115.3 and uvicorn>=0.30.6, and pinning them lower
+# (as an earlier draft of this file did) produces a real pip
+# ResolutionImpossible error. Let pip resolve them from kserve's own
+# constraint instead of fighting it.
+#
+# deepspeed is deliberately NOT listed here either — it is installed
+# explicitly in the Dockerfile with AOT build flags set beforehand, so
+# the CUDA ops actually get compiled ahead-of-time instead of falling
+# back to slow first-request JIT compilation.
+#
+# Before building, dry-run resolve this file to catch conflicts early:
+#   python3 -m venv /tmp/depcheck && /tmp/depcheck/bin/pip install --upgrade pip
+#   /tmp/depcheck/bin/pip install --dry-run -r requirements.txt
+#
+# IMPORTANT: verify `kserve` above matches your actual cluster's KServe
+# controller version before building:
+#   kubectl get deployment kserve-controller-manager -n kserve \
+#     -o jsonpath='{.spec.template.spec.containers[0].image}'

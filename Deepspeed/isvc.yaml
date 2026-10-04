@@ -1,0 +1,73 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: qwen2-zero-inference
+  namespace: llm-demo
+spec:
+  predictor:
+    nodeSelector:
+      workload-node: zero-inference
+    containers:
+      - name: kserve-container
+        image: 10.42.0.1:5000/kserve/qwen-zero-inference:v1
+        # Always, not IfNotPresent — avoids kubelet reusing a stale local
+        # image after a rebuild under the same tag during iteration.
+        imagePullPolicy: Always
+        args:
+          - --http_port=8080
+          - --model_name=qwen2-zero-inference
+        env:
+          - name: MODEL_DIR
+            value: /mnt/models
+          - name: DS_CONFIG_PATH
+            value: /app/ds_config.json
+          # Required: without these, deepspeed.initialize() tries MPI-based
+          # peer discovery (mpi_discovery() -> ModuleNotFoundError: mpi4py)
+          # instead of recognizing this as a single, non-distributed process.
+          - name: MASTER_ADDR
+            value: "127.0.0.1"
+          - name: MASTER_PORT
+            value: "29500"
+          - name: RANK
+            value: "0"
+          - name: LOCAL_RANK
+            value: "0"
+          - name: WORLD_SIZE
+            value: "1"
+        resources:
+          # new2 is a shared cluster node (~48 other pods: Istio, cert-manager,
+          # Knative, KEDA, GPU operator, monitoring) already at ~93% memory
+          # requested before this workload. These values are sized to fit
+          # the real remaining headroom, not a generic default — re-check
+          # `kubectl describe node new2 | grep -A5 "Allocated resources"`
+          # before reusing this on a different node or a larger model.
+          limits:
+            cpu: "2"
+            memory: 2Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "500m"
+            memory: 1Gi
+            nvidia.com/gpu: "1"
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+          - name: model-storage
+            mountPath: /mnt/models
+            readOnly: true
+          - name: offload-storage
+            mountPath: /local-offload
+    volumes:
+      - name: model-storage
+        hostPath:
+          # Model checkpoint on NFS is fine — read once, sequentially, at
+          # startup. Only the live offload swap path (below) needs local disk.
+          path: /mnt/nfs/autoscale-qwen-model-pvc-pvc-717f9270-0363-4205-b75f-6f118afff3b6/qwen
+          type: Directory
+      - name: offload-storage
+        persistentVolumeClaim:
+          claimName: ds-offload-pvc
